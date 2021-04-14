@@ -10,6 +10,7 @@ IMPORTANT:
         that the default value is able to pass the local and auto-grader test.
 """
 from utils import *
+import progressbar
 
 class Constants:
     """
@@ -276,7 +277,10 @@ class WGAN(object):
         Initialize the GAN with your discriminator, generator and anything you need here.
         Feel free to change/modify your function signatures here, this will *not* be autograded.
         """
-        raise NotImplementedError
+        
+        self.gen = generator
+        self.dis = discriminator
+        self.num = numbers
 
 
     def linear_interpolation(self):
@@ -287,7 +291,7 @@ class WGAN(object):
         """
         raise NotImplementedError
 
-    def train(self):
+    def train(self, data):
         """
         Determine how to train the WGAN. 
         You can use the "img_tile" functions in utils.py to visualize your generated batch.
@@ -295,7 +299,50 @@ class WGAN(object):
         If you make changes to the vizualization procedure for the fake batches, 
         please include them in your utils.py file.
         """
-        raise NotImplementedError
+
+        dis_losses = []
+        
+        for epoch in progressbar.progressbar(range(Constants.num_epochs)):
+
+            random_X = data[0].copy()
+            np.random.shuffle(random_X)
+
+            dis_n_losses = []
+
+            for i in range(Constants.n_critic):
+
+                x_batch = random_X[i*100 : (i+1)*100]
+                z_batch = np.random.normal(0, 1, (Constants.batch_size, 100))
+
+                x_logit = self.dis.forward(x_batch)
+                self.dis.backward(x_logit, x_batch, +1)
+
+                f_batch = self.gen.forward(z_batch)
+                f_logit = self.dis.forward(f_batch)
+                self.dis.backward(f_logit, f_batch, +1)
+                
+                self.dis.weight_clipping()
+
+                dis_n_losses.append(np.sum(x_logit)-np.sum(f_logit)/Constants.batch_size)
+
+            dis_losses.append(sum(dis_n_losses)/len(dis_n_losses))
+            
+            z_batch = np.random.normal(0, 1, (Constants.batch_size, 100))
+
+            f_batch = self.gen.forward(z_batch)
+            f_logit = self.dis.forward(f_batch)
+            
+            self.gen.backward(f_logit, f_batch, self.dis)
+
+            img_tile(f_batch, "./gen_i", epoch, True)
+
+
+        plt.plot(dis_losses, label="Discriminator_loss")
+        plt.xlabel("epochs")
+        plt.ylabel("loss")
+        plt.legend()
+        plt.title("Loss plot")
+        plt.show()
 
 
 
@@ -306,4 +353,13 @@ if __name__ == '__main__':
     DO NOT use pytorch or tensorflow get the results. The results generated using these
     libraries will be different as compared to your implementation.
     """
-    pass
+    #import ipdb;ipdb.set_trace()
+    numbers = [2]
+
+    data = mnist_reader(numbers)
+
+    wgan = WGAN(Generator(), Discriminator(), numbers)
+
+    wgan.train(data)
+
+
